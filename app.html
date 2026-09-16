@@ -1,0 +1,1380 @@
+<script>
+
+let state = {
+
+  token:
+    sessionStorage.getItem(
+      'vertriebsportal_token'
+    ),
+
+  catalog: [],
+
+  completed: [],
+
+  selectedLesson: null,
+
+  player: null,
+
+  maxSeconds: 0,
+
+  timer: null
+
+};
+
+
+const $ =
+  id =>
+    document.getElementById(id);
+
+
+const call =
+  (name, ...args) =>
+    new Promise(
+      (resolve, reject) => {
+
+        const runner =
+          google.script.run
+            .withSuccessHandler(
+              resolve
+            )
+            .withFailureHandler(
+              err =>
+                reject(
+                  new Error(
+                    err.message || err
+                  )
+                )
+            );
+
+
+        runner[name](...args);
+
+      }
+    );
+
+
+// =====================================================
+// START
+// =====================================================
+
+document.addEventListener(
+  'DOMContentLoaded',
+  () => {
+
+    $('showRegister').onclick =
+      () =>
+        showAuth('register');
+
+
+    $('showLogin').onclick =
+      () =>
+        showAuth('login');
+
+
+    $('forgotLink').onclick =
+      () =>
+        showAuth('forgot');
+
+
+    $('backToLogin').onclick =
+      () =>
+        showAuth('login');
+
+
+    $('loginForm').onsubmit =
+      submitLogin;
+
+
+    $('registerForm').onsubmit =
+      submitRegister;
+
+
+    $('forgotForm').onsubmit =
+      submitForgot;
+
+
+    $('resetForm').onsubmit =
+      submitReset;
+
+
+    $('logoutButton').onclick =
+      logout;
+
+
+    $('certificateButton').onclick =
+      downloadCertificate;
+
+
+    $('registerEmail')
+      .addEventListener(
+        'blur',
+        checkExistingEmail
+      );
+
+
+    if (RESET_TOKEN) {
+
+      showAuth('reset');
+
+    }
+
+    /*
+     * Nur wenn bereits ein echter
+     * Session-Token vorhanden ist,
+     * Dashboard laden.
+     */
+
+    else if (state.token) {
+
+      loadAcademy();
+
+    }
+
+  }
+);
+
+
+// =====================================================
+// AUTH VIEW
+// =====================================================
+
+function showAuth(view) {
+
+  $('authView').hidden =
+    false;
+
+  $('academyView').hidden =
+    true;
+
+
+  [
+    'login',
+    'register',
+    'forgot',
+    'reset'
+  ].forEach(
+    v => {
+
+      $(v + 'Panel').hidden =
+        v !== view;
+
+    }
+  );
+
+
+  $('authMessage').textContent =
+    '';
+
+}
+
+
+// =====================================================
+// MESSAGE
+// =====================================================
+
+function setMessage(
+  message,
+  success
+) {
+
+  const el =
+    $('authMessage');
+
+
+  el.textContent =
+    message;
+
+
+  el.className =
+    'message' +
+    (
+      success
+        ? ' success'
+        : ''
+    );
+
+}
+
+
+// =====================================================
+// BUTTON LOADING
+// =====================================================
+
+function busy(
+  form,
+  on
+) {
+
+  const button =
+    form.querySelector(
+      'button.primary'
+    );
+
+
+  button.disabled =
+    on;
+
+
+  button.dataset.text ||=
+    button.textContent;
+
+
+  button.textContent =
+    on
+      ? 'Bitte warten …'
+      : button.dataset.text;
+
+}
+
+
+// =====================================================
+// LOGIN
+// =====================================================
+
+async function submitLogin(e) {
+
+  e.preventDefault();
+
+  busy(
+    e.target,
+    true
+  );
+
+
+  try {
+
+    const result =
+      await call(
+        'login',
+        {
+
+          email:
+            $('loginEmail').value,
+
+          password:
+            $('loginPassword').value
+
+        }
+      );
+
+
+    /*
+     * Nur beim ECHTEN Login
+     * wird eine Session gespeichert.
+     */
+
+    setToken(
+      result.token
+    );
+
+
+    await loadAcademy();
+
+
+  } catch (err) {
+
+    /*
+     * Wenn Konto noch nicht
+     * freigeschaltet ist:
+     * genau diese Meldung anzeigen.
+     */
+
+    if (
+      err &&
+      err.message ===
+        'Dein Konto ist noch nicht freigeschaltet.'
+    ) {
+
+      setMessage(
+        'Dein Zugang wird geprüft und innerhalb von 24 Stunden freigeschaltet.',
+        true
+      );
+
+    } else {
+
+      setMessage(
+        err.message ||
+        'Anmeldung fehlgeschlagen.'
+      );
+
+    }
+
+
+  } finally {
+
+    busy(
+      e.target,
+      false
+    );
+
+  }
+
+}
+
+
+// =====================================================
+// REGISTRIERUNG
+// =====================================================
+
+async function submitRegister(e) {
+
+  e.preventDefault();
+
+  busy(
+    e.target,
+    true
+  );
+
+
+  try {
+
+    await call(
+      'register',
+      {
+
+        firstName:
+          $('firstName').value,
+
+        lastName:
+          $('lastName').value,
+
+        email:
+          $('registerEmail').value,
+
+        password:
+          $('registerPassword').value
+
+      }
+    );
+
+
+    /*
+     * SEHR WICHTIG:
+     *
+     * KEIN setToken()
+     * KEIN loadAcademy()
+     *
+     * Nach der Registrierung gibt es
+     * absichtlich noch keine Session.
+     */
+
+
+    $('registerForm').reset();
+
+
+    setMessage(
+      'Registrierung erfolgreich! Dein Zugang wird geprüft und innerhalb von 24 Stunden freigeschaltet.',
+      true
+    );
+
+
+    /*
+     * Nach kurzer Zeit zurück zum Login.
+     */
+
+    setTimeout(
+      () => {
+
+        showAuth('login');
+
+        setMessage(
+          'Dein Zugang wird geprüft und innerhalb von 24 Stunden freigeschaltet.',
+          true
+        );
+
+      },
+      2500
+    );
+
+
+  } catch (err) {
+
+    setMessage(
+      err.message ||
+      'Die Registrierung konnte nicht abgeschlossen werden.'
+    );
+
+
+  } finally {
+
+    busy(
+      e.target,
+      false
+    );
+
+  }
+
+}
+
+
+// =====================================================
+// PASSWORT VERGESSEN
+// =====================================================
+
+async function submitForgot(e) {
+
+  e.preventDefault();
+
+  busy(
+    e.target,
+    true
+  );
+
+
+  try {
+
+    await call(
+      'requestPasswordReset',
+      {
+
+        email:
+          $('forgotEmail').value
+
+      }
+    );
+
+
+    setMessage(
+      'Falls ein Konto vorhanden ist, wurde ein Link an diese Adresse gesendet.',
+      true
+    );
+
+
+  } catch (err) {
+
+    setMessage(
+      err.message
+    );
+
+
+  } finally {
+
+    busy(
+      e.target,
+      false
+    );
+
+  }
+
+}
+
+
+// =====================================================
+// PASSWORT ZURÜCKSETZEN
+// =====================================================
+
+async function submitReset(e) {
+
+  e.preventDefault();
+
+  busy(
+    e.target,
+    true
+  );
+
+
+  try {
+
+    await call(
+      'resetPassword',
+      {
+
+        token:
+          RESET_TOKEN,
+
+        password:
+          $('resetPassword').value
+
+      }
+    );
+
+
+    setMessage(
+      'Passwort gespeichert. Du kannst dich jetzt anmelden.',
+      true
+    );
+
+
+    setTimeout(
+      () =>
+        showAuth('login'),
+      1300
+    );
+
+
+  } catch (err) {
+
+    setMessage(
+      err.message
+    );
+
+
+  } finally {
+
+    busy(
+      e.target,
+      false
+    );
+
+  }
+
+}
+
+
+// =====================================================
+// E-MAIL PRÜFEN
+// =====================================================
+
+async function checkExistingEmail() {
+
+  const email =
+    $('registerEmail')
+      .value
+      .trim();
+
+
+  if (!email) {
+    return;
+  }
+
+
+  try {
+
+    const result =
+      await call(
+        'checkRegistration',
+        email
+      );
+
+
+    const hint =
+      $('registrationHint');
+
+
+    hint.hidden =
+      !result.registered;
+
+
+    hint.textContent =
+      result.registered
+        ? 'Diese E-Mail ist bereits registriert. Bitte melde dich an.'
+        : '';
+
+
+  } catch (_) {}
+
+}
+
+
+// =====================================================
+// TOKEN
+// =====================================================
+
+function setToken(token) {
+
+  state.token =
+    token;
+
+
+  sessionStorage.setItem(
+    'vertriebsportal_token',
+    token
+  );
+
+}
+
+
+// =====================================================
+// LOGOUT
+// =====================================================
+
+function logout() {
+
+  if (
+    state.player
+  ) {
+
+    state.player.destroy();
+
+  }
+
+
+  sessionStorage.removeItem(
+    'vertriebsportal_token'
+  );
+
+
+  state = {
+
+    token: null,
+
+    catalog: [],
+
+    completed: [],
+
+    selectedLesson: null,
+
+    player: null,
+
+    maxSeconds: 0,
+
+    timer: null
+
+  };
+
+
+  showAuth(
+    'login'
+  );
+
+}
+
+
+// =====================================================
+// AKADEMIE LADEN
+// =====================================================
+
+async function loadAcademy() {
+
+  try {
+
+    const data =
+      await call(
+        'getDashboard',
+        state.token
+      );
+
+
+    state.catalog =
+      data.catalog;
+
+
+    state.completed =
+      data.completedLessonIds;
+
+
+    $('authView').hidden =
+      true;
+
+
+    $('academyView').hidden =
+      false;
+
+
+    $('welcome').textContent =
+      'Hallo, ' +
+      data.user.firstName;
+
+
+    $('avatar').textContent =
+      (
+        data.user.firstName[0] +
+        data.user.lastName[0]
+      ).toUpperCase();
+
+
+    renderNavigation();
+
+
+    const firstLesson =
+      state.catalog
+        .flatMap(
+          c => c.lessons
+        )[0];
+
+
+    if (firstLesson) {
+
+      selectLesson(
+        firstLesson.id
+      );
+
+    }
+
+
+  } catch (err) {
+
+    /*
+     * Nur bei einem tatsächlich
+     * ungültigen/abgelaufenen Token
+     * zurück zum Login.
+     */
+
+    sessionStorage.removeItem(
+      'vertriebsportal_token'
+    );
+
+
+    state.token =
+      null;
+
+
+    showAuth(
+      'login'
+    );
+
+
+    setMessage(
+      'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.'
+    );
+
+  }
+
+}
+
+
+// =====================================================
+// KATEGORIE
+// =====================================================
+
+function categoryFor(
+  lessonId
+) {
+
+  return state.catalog.find(
+    category =>
+      category.lessons.some(
+        lesson =>
+          lesson.id === lessonId
+      )
+  );
+
+}
+
+
+// =====================================================
+// NAVIGATION
+// =====================================================
+
+function renderNavigation() {
+
+  const nav =
+    $('courseNav');
+
+
+  nav.innerHTML =
+    state.catalog
+      .map(
+        category => {
+
+          const doneCount =
+            category.lessons.filter(
+              lesson =>
+                state.completed.includes(
+                  lesson.id
+                )
+            ).length;
+
+
+          const isActive =
+            state.selectedLesson &&
+            category.lessons.some(
+              lesson =>
+                lesson.id ===
+                state.selectedLesson.id
+            );
+
+
+          return `
+
+            <div class="category ${isActive ? 'active' : ''}">
+
+              <button
+                class="category-toggle"
+                onclick="toggleCategory('${category.id}')"
+              >
+
+                <span>
+                  ${category.title}
+                </span>
+
+                <span class="category-progress">
+                  ${doneCount}/${category.lessons.length}⌄
+                </span>
+
+              </button>
+
+
+              <div
+                class="lesson-links"
+                id="${category.id}"
+                ${isActive ? '' : 'hidden'}
+              >
+
+                ${category.lessons
+                  .map(
+                    lesson => `
+
+                      <button
+                        class="lesson-link ${
+                          state.completed.includes(
+                            lesson.id
+                          )
+                            ? 'done'
+                            : ''
+                        } ${
+                          state.selectedLesson &&
+                          lesson.id ===
+                            state.selectedLesson.id
+                            ? 'selected'
+                            : ''
+                        }"
+                        onclick="selectLesson('${lesson.id}')"
+                      >
+
+                        <span>
+                          ${lesson.number}
+                          ${lesson.title.replace(
+                            /^Thema [A-Z]: /,
+                            ''
+                          )}
+                        </span>
+
+                      </button>
+
+                    `
+                  )
+                  .join('')}
+
+              </div>
+
+            </div>
+
+          `;
+
+        }
+      )
+      .join('');
+
+}
+
+
+// =====================================================
+// KATEGORIE AUFKLAPPEN
+// =====================================================
+
+function toggleCategory(id) {
+
+  const element =
+    $(id);
+
+
+  element.hidden =
+    !element.hidden;
+
+}
+
+
+// =====================================================
+// LESSON AUSWÄHLEN
+// =====================================================
+
+function selectLesson(id) {
+
+  const category =
+    categoryFor(id);
+
+
+  const lesson =
+    category.lessons.find(
+      item =>
+        item.id === id
+    );
+
+
+  state.selectedLesson = {
+
+    ...lesson,
+
+    categoryId:
+      category.id,
+
+    categoryTitle:
+      category.title
+
+  };
+
+
+  state.maxSeconds =
+    0;
+
+
+  if (
+    state.timer
+  ) {
+
+    clearInterval(
+      state.timer
+    );
+
+  }
+
+
+  if (
+    state.player
+  ) {
+
+    state.player.destroy();
+
+    state.player =
+      null;
+
+  }
+
+
+  renderNavigation();
+
+
+  $('lessonHeader').innerHTML = `
+
+    <span class="eyebrow">
+      ${category.title.toUpperCase()}
+      ·
+      ${lesson.number}
+    </span>
+
+    <h1>
+      ${lesson.title}
+    </h1>
+
+    <p>
+      ${lesson.durationHint || 'Verpflichtendes Lernvideo'}
+    </p>
+
+  `;
+
+
+  $('lessonStatus').textContent =
+    state.completed.includes(id)
+
+      ? '✓ Dieses Video wurde vollständig abgeschlossen.'
+
+      : 'Starte das Video. Es wird erst nach dem vollständigen Ansehen als erledigt markiert.';
+
+
+  $('lessonStatus').className =
+    'lesson-status ' +
+    (
+      state.completed.includes(id)
+        ? 'done'
+        : ''
+    );
+
+
+  renderCategoryProgress(
+    category
+  );
+
+
+  if (
+    !lesson.videoId
+  ) {
+
+    $('player').innerHTML =
+      '';
+
+    $('videoPlaceholder').hidden =
+      false;
+
+    return;
+
+  }
+
+
+  $('videoPlaceholder').hidden =
+    true;
+
+
+  loadPlayer(
+    lesson.videoId
+  );
+
+}
+
+
+// =====================================================
+// KATEGORIE-FORTSCHRITT
+// =====================================================
+
+function renderCategoryProgress(
+  category
+) {
+
+  const doneCount =
+    category.lessons.filter(
+      lesson =>
+        state.completed.includes(
+          lesson.id
+        )
+    ).length;
+
+
+  const finished =
+    doneCount ===
+    category.lessons.length;
+
+
+  $('categoryProgress').textContent =
+    `${doneCount} von ${category.lessons.length} Themen abgeschlossen`;
+
+
+  $('certificateButton').disabled =
+    !finished;
+
+
+  $('certificateButton')
+    .dataset.category =
+      category.id;
+
+}
+
+
+// =====================================================
+// YOUTUBE PLAYER
+// =====================================================
+
+function loadPlayer(
+  videoId
+) {
+
+  $('player').innerHTML =
+    '';
+
+
+  const startPlayer =
+    () => {
+
+      state.player =
+        new YT.Player(
+          'player',
+          {
+
+            videoId,
+
+            playerVars: {
+
+              controls: 0,
+
+              disablekb: 1,
+
+              fs: 0,
+
+              modestbranding: 1,
+
+              rel: 0
+
+            },
+
+            events: {
+
+              onStateChange:
+                onPlayerState
+
+            }
+
+          }
+        );
+
+    };
+
+
+  if (
+    window.YT &&
+    YT.Player
+  ) {
+
+    startPlayer();
+
+  } else {
+
+    window.onYouTubeIframeAPIReady =
+      startPlayer;
+
+
+    if (
+      !document.querySelector(
+        'script[src*="youtube.com/iframe_api"]'
+      )
+    ) {
+
+      const script =
+        document.createElement(
+          'script'
+        );
+
+
+      script.src =
+        'https://www.youtube.com/iframe_api';
+
+
+      document.head.appendChild(
+        script
+      );
+
+    }
+
+  }
+
+}
+
+
+// =====================================================
+// VIDEO STATUS
+// =====================================================
+
+function onPlayerState(
+  event
+) {
+
+  if (
+    event.data ===
+    YT.PlayerState.PLAYING
+  ) {
+
+    state.timer =
+      setInterval(
+        enforceNoSeeking,
+        400
+      );
+
+  }
+
+  else if (
+    event.data ===
+    YT.PlayerState.ENDED
+  ) {
+
+    clearInterval(
+      state.timer
+    );
+
+
+    completeCurrentLesson();
+
+  }
+
+  else if (
+    event.data !==
+      YT.PlayerState.BUFFERING &&
+    state.timer
+  ) {
+
+    clearInterval(
+      state.timer
+    );
+
+  }
+
+}
+
+
+// =====================================================
+// VORSPULEN VERHINDERN
+// =====================================================
+
+function enforceNoSeeking() {
+
+  if (
+    !state.player ||
+    !state.player.getCurrentTime
+  ) {
+
+    return;
+
+  }
+
+
+  const currentTime =
+    state.player.getCurrentTime();
+
+
+  if (
+    currentTime >
+    state.maxSeconds + 2
+  ) {
+
+    state.player.seekTo(
+      state.maxSeconds,
+      true
+    );
+
+
+    toast(
+      'Vorspulen ist in diesem Pflichtvideo nicht möglich.'
+    );
+
+  }
+
+  else {
+
+    state.maxSeconds =
+      Math.max(
+        state.maxSeconds,
+        currentTime
+      );
+
+  }
+
+}
+
+
+// =====================================================
+// LESSON ABSCHLIESSEN
+// =====================================================
+
+async function completeCurrentLesson() {
+
+  const lessonId =
+    state.selectedLesson.id;
+
+
+  if (
+    state.completed.includes(
+      lessonId
+    )
+  ) {
+
+    return;
+
+  }
+
+
+  try {
+
+    const result =
+      await call(
+        'markLessonComplete',
+        state.token,
+        lessonId
+      );
+
+
+    state.completed =
+      result.completedLessonIds;
+
+
+    $('lessonStatus').textContent =
+      '✓ Dieses Video wurde vollständig abgeschlossen.';
+
+
+    $('lessonStatus').className =
+      'lesson-status done';
+
+
+    renderNavigation();
+
+
+    renderCategoryProgress(
+      categoryFor(lessonId)
+    );
+
+
+    toast(
+      'Video abgeschlossen – gut gemacht!'
+    );
+
+
+  } catch (err) {
+
+    toast(
+      err.message
+    );
+
+  }
+
+}
+
+
+// =====================================================
+// ZERTIFIKAT
+// =====================================================
+
+async function downloadCertificate() {
+
+  const button =
+    $('certificateButton');
+
+
+  button.disabled =
+    true;
+
+
+  button.textContent =
+    'Zertifikat wird erstellt …';
+
+
+  try {
+
+    const result =
+      await call(
+        'createCertificate',
+        state.token,
+        button.dataset.category
+      );
+
+
+    window.open(
+      result.url,
+      '_blank'
+    );
+
+
+    toast(
+      'Dein Zertifikat wird heruntergeladen.'
+    );
+
+
+  } catch (err) {
+
+    toast(
+      err.message
+    );
+
+
+  } finally {
+
+    button.textContent =
+      '↓ Zertifikat als PDF';
+
+
+    button.disabled =
+      false;
+
+  }
+
+}
+
+
+// =====================================================
+// TOAST
+// =====================================================
+
+function toast(message) {
+
+  const element =
+    $('toast');
+
+
+  element.textContent =
+    message;
+
+
+  element.classList.add(
+    'show-toast'
+  );
+
+
+  setTimeout(
+    () => {
+
+      element.classList.remove(
+        'show-toast'
+      );
+
+    },
+    3200
+  );
+
+}
+
+</script>

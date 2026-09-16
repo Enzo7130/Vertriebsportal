@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <base target="_top">
+    <style><?!= include('Styles'); ?></style>
+  </head>
+  <body>
+    <main id="authView" class="auth-shell">
+      <section class="brand-panel">
+        <span class="eyebrow">VERTRIEBSPORTAL</span>
+        <h1>Wissen, das<br>Abschlüsse schafft.</h1>
+        <p>Dein verpflichtendes Lernprogramm für den erfolgreichen Vertrieb.</p>
+        <div class="brand-stat">
+          <b>100%</b>
+          <span>Videos vollständig ansehen<br>und Zertifikate erhalten</span>
+        </div>
+      </section>
+
+      <section class="form-panel">
+        <div class="auth-card">
+          <div id="loginPanel">
+            <span class="eyebrow">WILLKOMMEN ZURÜCK</span>
+            <h2>Anmelden</h2>
+            <p class="muted">Melde dich mit deinen Zugangsdaten an.</p>
+
+            <form id="loginForm">
+              <label>
+                E-Mail-Adresse
+                <input id="loginEmail" type="email" autocomplete="email" required>
+              </label>
+              <label>
+                Passwort
+                <input id="loginPassword" type="password" autocomplete="current-password" required>
+              </label>
+              <button class="link-button" type="button" id="forgotLink">Passwort vergessen?</button>
+              <button class="primary" type="submit">Anmelden <span>→</span></button>
+            </form>
+
+            <p class="switch">
+              Noch kein Zugang?
+              <button class="text-button" id="showRegister">Jetzt registrieren</button>
+            </p>
+          </div>
+
+          <div id="registerPanel" hidden>
+            <button class="back" id="showLogin">← Zurück</button>
+            <span class="eyebrow">NEUER ZUGANG</span>
+            <h2>Registrieren</h2>
+            <p class="muted">Deine E-Mail wird zuerst im Vertriebsverzeichnis geprüft.</p>
+
+            <form id="registerForm">
+              <div class="two-col">
+                <label>
+                  Vorname
+                  <input id="firstName" required>
+                </label>
+                <label>
+                  Nachname
+                  <input id="lastName" required>
+                </label>
+              </div>
+
+              <label>
+                E-Mail-Adresse
+                <input id="registerEmail" type="email" autocomplete="email" required>
+              </label>
+
+              <p id="registrationHint" class="hint" hidden></p>
+
+              <label>
+                Passwort
+                <input id="registerPassword" type="password" minlength="10" autocomplete="new-password" required>
+                <small>Mindestens 10 Zeichen</small>
+              </label>
+
+              <button class="primary" type="submit">Konto erstellen <span>→</span></button>
+            </form>
+          </div>
+
+          <div id="forgotPanel" hidden>
+            <button class="back" id="backToLogin">← Zurück</button>
+            <span class="eyebrow">ZUGANG WIEDERHERSTELLEN</span>
+            <h2>Passwort vergessen?</h2>
+            <p class="muted">Wir senden dir einen sicheren Link zum Zurücksetzen.</p>
+
+            <form id="forgotForm">
+              <label>
+                E-Mail-Adresse
+                <input id="forgotEmail" type="email" required>
+              </label>
+              <button class="primary" type="submit">Link anfordern <span>→</span></button>
+            </form>
+          </div>
+
+          <div id="resetPanel" hidden>
+            <span class="eyebrow">NEUES PASSWORT</span>
+            <h2>Passwort festlegen</h2>
+            <p class="muted">Wähle ein neues Passwort für dein Konto.</p>
+
+            <form id="resetForm">
+              <label>
+                Neues Passwort
+                <input id="resetPassword" type="password" minlength="10" required>
+                <small>Mindestens 10 Zeichen</small>
+              </label>
+              <button class="primary" type="submit">Passwort speichern <span>→</span></button>
+            </form>
+          </div>
+
+          <p id="authMessage" class="message" role="status"></p>
+        </div>
+      </section>
+    </main>
+
+    <main id="academyView" class="academy" hidden>
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <span class="logo-mark">V</span>
+          <span>VERTRIEBSPORTAL</span>
+        </div>
+
+        <nav id="courseNav" aria-label="Kurskategorien"></nav>
+
+        <button id="logoutButton" class="logout">↪ Abmelden</button>
+      </aside>
+
+      <section class="content">
+        <header class="topbar">
+          <div>
+            <span class="eyebrow">DEINE AKADEMIE</span>
+            <h2 id="welcome">Hallo</h2>
+          </div>
+          <div class="avatar" id="avatar"></div>
+        </header>
+
+        <div class="course-content">
+          <div id="lessonHeader" class="lesson-header"></div>
+
+          <div id="videoNotice" class="watch-notice">
+            Dieses Video muss vollständig angesehen werden. Vorspulen ist deaktiviert.
+          </div>
+
+          <div class="video-frame">
+            <div id="player"></div>
+            <div id="videoPlaceholder" class="video-placeholder" hidden>
+              Bitte hinterlege für dieses Thema eine YouTube-Video-ID in <code>Code.gs</code>.
+            </div>
+          </div>
+
+          <div id="lessonStatus" class="lesson-status"></div>
+
+          <section class="next-card">
+            <div>
+              <span class="eyebrow">KATEGORIE-FORTSCHRITT</span>
+              <h3 id="categoryProgress"></h3>
+            </div>
+
+            <button id="certificateButton" class="certificate" disabled>
+              ↓ Zertifikat als PDF
+            </button>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <div id="toast" role="status"></div>
+
+    <script>const RESET_TOKEN = <?!= JSON.stringify(resetToken); ?>;</script>
+    <?!= include('App'); ?>
+  </body>
+</html>
